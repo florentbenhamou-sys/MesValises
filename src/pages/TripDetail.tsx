@@ -10,16 +10,24 @@ import {
   formatWeight,
   ITEM_CATALOG,
   itemTotalWeightG,
+  LUGGAGE_KIND_LABELS,
 } from '../lib/weightEstimate';
 
 type Tab = 'personnes' | 'valises';
 
-const LUGGAGE_KIND_LABELS: Record<LuggageKind, string> = {
-  valise: 'Valise',
-  cabine: 'Bagage cabine',
-  sac: 'Sac',
-  autre: 'Autre',
-};
+export interface ItemPayload {
+  name: string;
+  category: ItemCategory;
+  quantity: number;
+  unit_weight_g: number | null;
+}
+
+export interface LuggagePayload {
+  name: string;
+  kind: LuggageKind;
+  owner_person_id: string | null;
+  max_weight_kg: number | null;
+}
 
 export default function TripDetail() {
   const { tripId } = useParams<{ tripId: string }>();
@@ -80,7 +88,7 @@ export default function TripDetail() {
   const totalForLuggage = (luggageId: string) =>
     items.filter((i) => i.luggage_id === luggageId).reduce((sum, i) => sum + weightOf(i), 0);
 
-  async function addItem(personId: string, payload: { name: string; category: ItemCategory; quantity: number; unit_weight_g: number | null }) {
+  async function addItem(personId: string, payload: ItemPayload) {
     if (!tripId) return;
     const { error: insertError } = await supabase.from('items').insert({
       trip_id: tripId,
@@ -91,6 +99,20 @@ export default function TripDetail() {
       unit_weight_g: payload.unit_weight_g,
     });
     if (insertError) setError(insertError.message);
+    else loadAll();
+  }
+
+  async function updateItem(id: string, payload: ItemPayload) {
+    const { error: updateError } = await supabase
+      .from('items')
+      .update({
+        name: payload.name,
+        category: payload.category,
+        quantity: payload.quantity,
+        unit_weight_g: payload.unit_weight_g,
+      })
+      .eq('id', id);
+    if (updateError) setError(updateError.message);
     else loadAll();
   }
 
@@ -124,7 +146,7 @@ export default function TripDetail() {
     else setItems((prev) => prev.filter((i) => i.id !== id));
   }
 
-  async function addLuggage(payload: { name: string; kind: LuggageKind; owner_person_id: string | null; max_weight_kg: number | null }) {
+  async function addLuggage(payload: LuggagePayload) {
     if (!tripId) return;
     const { error: insertError } = await supabase.from('luggages').insert({
       trip_id: tripId,
@@ -134,6 +156,20 @@ export default function TripDetail() {
       max_weight_kg: payload.max_weight_kg,
     });
     if (insertError) setError(insertError.message);
+    else loadAll();
+  }
+
+  async function updateLuggage(id: string, payload: LuggagePayload) {
+    const { error: updateError } = await supabase
+      .from('luggages')
+      .update({
+        name: payload.name,
+        kind: payload.kind,
+        owner_person_id: payload.owner_person_id,
+        max_weight_kg: payload.max_weight_kg,
+      })
+      .eq('id', id);
+    if (updateError) setError(updateError.message);
     else loadAll();
   }
 
@@ -178,6 +214,7 @@ export default function TripDetail() {
           totalForPerson={totalForPerson}
           weightOf={weightOf}
           onAddItem={addItem}
+          onUpdateItem={updateItem}
           onTogglePacked={togglePacked}
           onAssignLuggage={assignLuggage}
           onDeleteItem={deleteItem}
@@ -186,11 +223,13 @@ export default function TripDetail() {
 
       {tab === 'valises' && (
         <ValisesTab
+          tripId={tripId!}
           luggages={luggages}
           people={people}
           items={items}
           totalForLuggage={totalForLuggage}
           onAddLuggage={addLuggage}
+          onUpdateLuggage={updateLuggage}
           onDeleteLuggage={deleteLuggage}
         />
       )}
@@ -206,11 +245,21 @@ interface PersonneTabProps {
   setActivePersonId: (id: string) => void;
   totalForPerson: (id: string) => number;
   weightOf: (item: Item) => number;
-  onAddItem: (personId: string, payload: { name: string; category: ItemCategory; quantity: number; unit_weight_g: number | null }) => void;
+  onAddItem: (personId: string, payload: ItemPayload) => void;
+  onUpdateItem: (id: string, payload: ItemPayload) => void;
   onTogglePacked: (item: Item) => void;
   onAssignLuggage: (item: Item, luggageId: string | null) => void;
   onDeleteItem: (id: string) => void;
 }
+
+interface ItemFormState {
+  name: string;
+  category: ItemCategory;
+  quantity: string;
+  weight: string;
+}
+
+const EMPTY_ITEM_FORM: ItemFormState = { name: '', category: 'vetement', quantity: '1', weight: '' };
 
 function PersonneTab({
   people,
@@ -221,15 +270,14 @@ function PersonneTab({
   totalForPerson,
   weightOf,
   onAddItem,
+  onUpdateItem,
   onTogglePacked,
   onAssignLuggage,
   onDeleteItem,
 }: PersonneTabProps) {
-  const [showForm, setShowForm] = useState(false);
-  const [itemName, setItemName] = useState('');
-  const [category, setCategory] = useState<ItemCategory>('vetement');
-  const [quantity, setQuantity] = useState(1);
-  const [customWeight, setCustomWeight] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [form, setForm] = useState<ItemFormState>(EMPTY_ITEM_FORM);
 
   if (people.length === 0) {
     return (
@@ -242,20 +290,47 @@ function PersonneTab({
   const activePerson = people.find((p) => p.id === activePersonId) ?? people[0];
   const personItems = items.filter((i) => i.person_id === activePerson.id);
 
-  function handleAdd(e: FormEvent) {
-    e.preventDefault();
-    if (!itemName.trim()) return;
-    onAddItem(activePerson.id, {
-      name: itemName.trim(),
-      category,
-      quantity: Math.max(1, quantity),
-      unit_weight_g: customWeight ? Number(customWeight) : null,
-    });
-    setItemName('');
-    setQuantity(1);
-    setCustomWeight('');
-    setShowForm(false);
+  function startAdd() {
+    setEditingItemId(null);
+    setForm(EMPTY_ITEM_FORM);
+    setShowAddForm((v) => !v);
   }
+
+  function startEdit(item: Item) {
+    setShowAddForm(false);
+    setEditingItemId(item.id);
+    setForm({
+      name: item.name,
+      category: item.category,
+      quantity: String(item.quantity),
+      weight: item.unit_weight_g ? String(item.unit_weight_g) : '',
+    });
+  }
+
+  function cancelForm() {
+    setShowAddForm(false);
+    setEditingItemId(null);
+    setForm(EMPTY_ITEM_FORM);
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    const payload: ItemPayload = {
+      name: form.name.trim(),
+      category: form.category,
+      quantity: Math.max(1, Number(form.quantity) || 1),
+      unit_weight_g: form.weight ? Number(form.weight) : null,
+    };
+    if (editingItemId) {
+      onUpdateItem(editingItemId, payload);
+    } else {
+      onAddItem(activePerson.id, payload);
+    }
+    cancelForm();
+  }
+
+  const formOpen = showAddForm || editingItemId !== null;
 
   return (
     <div>
@@ -265,7 +340,10 @@ function PersonneTab({
             key={p.id}
             className={p.id === activePerson.id ? 'chip active' : 'chip'}
             style={{ borderColor: p.color }}
-            onClick={() => setActivePersonId(p.id)}
+            onClick={() => {
+              setActivePersonId(p.id);
+              cancelForm();
+            }}
           >
             <span className="avatar avatar-sm" style={{ background: p.color }}>
               {p.name.charAt(0).toUpperCase()}
@@ -282,18 +360,18 @@ function PersonneTab({
         <strong>{formatWeight(totalForPerson(activePerson.id))} estimés</strong>
       </div>
 
-      <button className="btn btn-primary btn-sm" onClick={() => setShowForm((v) => !v)}>
-        {showForm ? 'Annuler' : '+ Ajouter un article'}
+      <button className="btn btn-primary btn-sm" onClick={startAdd}>
+        {showAddForm ? 'Annuler' : '+ Ajouter un article'}
       </button>
 
-      {showForm && (
-        <form className="form card" onSubmit={handleAdd}>
+      {formOpen && (
+        <form className="form card" onSubmit={handleSubmit}>
           <label>
             Article
             <input
               list="item-catalog"
-              value={itemName}
-              onChange={(e) => setItemName(e.target.value)}
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="T-shirt"
               required
             />
@@ -306,7 +384,10 @@ function PersonneTab({
           <div className="form-row">
             <label>
               Catégorie
-              <select value={category} onChange={(e) => setCategory(e.target.value as ItemCategory)}>
+              <select
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value as ItemCategory })}
+              >
                 {CATEGORY_ORDER.map((c) => (
                   <option key={c} value={c}>
                     {CATEGORY_LABELS[c]}
@@ -316,7 +397,12 @@ function PersonneTab({
             </label>
             <label>
               Quantité
-              <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+              <input
+                type="number"
+                min={1}
+                value={form.quantity}
+                onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+              />
             </label>
           </div>
           <label>
@@ -324,14 +410,19 @@ function PersonneTab({
             <input
               type="number"
               min={0}
-              value={customWeight}
-              onChange={(e) => setCustomWeight(e.target.value)}
+              value={form.weight}
+              onChange={(e) => setForm({ ...form, weight: e.target.value })}
               placeholder="estimation auto"
             />
           </label>
-          <button className="btn btn-primary" type="submit">
-            Ajouter
-          </button>
+          <div className="form-row">
+            <button className="btn btn-primary" type="submit">
+              {editingItemId ? 'Enregistrer' : 'Ajouter'}
+            </button>
+            <button className="btn btn-secondary" type="button" onClick={cancelForm}>
+              Annuler
+            </button>
+          </div>
         </form>
       )}
 
@@ -363,6 +454,9 @@ function PersonneTab({
                   </option>
                 ))}
               </select>
+              <button className="icon-btn" onClick={() => startEdit(item)} aria-label="Modifier">
+                ✏️
+              </button>
               <button className="icon-btn" onClick={() => onDeleteItem(item.id)} aria-label="Supprimer">
                 ✕
               </button>
@@ -375,56 +469,103 @@ function PersonneTab({
 }
 
 interface ValisesTabProps {
+  tripId: string;
   luggages: Luggage[];
   people: Person[];
   items: Item[];
   totalForLuggage: (id: string) => number;
-  onAddLuggage: (payload: { name: string; kind: LuggageKind; owner_person_id: string | null; max_weight_kg: number | null }) => void;
+  onAddLuggage: (payload: LuggagePayload) => void;
+  onUpdateLuggage: (id: string, payload: LuggagePayload) => void;
   onDeleteLuggage: (id: string) => void;
 }
 
-function ValisesTab({ luggages, people, items, totalForLuggage, onAddLuggage, onDeleteLuggage }: ValisesTabProps) {
-  const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState('');
-  const [kind, setKind] = useState<LuggageKind>('valise');
-  const [owner, setOwner] = useState('');
-  const [maxWeight, setMaxWeight] = useState('23');
+interface LuggageFormState {
+  name: string;
+  kind: LuggageKind;
+  owner: string;
+  maxWeight: string;
+}
 
-  function handleAdd(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    onAddLuggage({
-      name: name.trim(),
-      kind,
-      owner_person_id: owner || null,
-      max_weight_kg: maxWeight ? Number(maxWeight) : null,
-    });
-    setName('');
-    setOwner('');
-    setMaxWeight('23');
-    setShowForm(false);
+const EMPTY_LUGGAGE_FORM: LuggageFormState = { name: '', kind: 'valise', owner: '', maxWeight: '23' };
+
+function ValisesTab({
+  tripId,
+  luggages,
+  people,
+  items,
+  totalForLuggage,
+  onAddLuggage,
+  onUpdateLuggage,
+  onDeleteLuggage,
+}: ValisesTabProps) {
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingLuggageId, setEditingLuggageId] = useState<string | null>(null);
+  const [form, setForm] = useState<LuggageFormState>(EMPTY_LUGGAGE_FORM);
+
+  function startAdd() {
+    setEditingLuggageId(null);
+    setForm(EMPTY_LUGGAGE_FORM);
+    setShowAddForm((v) => !v);
   }
 
-  const unassignedWeight = items
-    .filter((i) => !i.luggage_id)
-    .length;
+  function startEdit(luggage: Luggage) {
+    setShowAddForm(false);
+    setEditingLuggageId(luggage.id);
+    setForm({
+      name: luggage.name,
+      kind: luggage.kind,
+      owner: luggage.owner_person_id ?? '',
+      maxWeight: luggage.max_weight_kg ? String(luggage.max_weight_kg) : '',
+    });
+  }
+
+  function cancelForm() {
+    setShowAddForm(false);
+    setEditingLuggageId(null);
+    setForm(EMPTY_LUGGAGE_FORM);
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    const payload: LuggagePayload = {
+      name: form.name.trim(),
+      kind: form.kind,
+      owner_person_id: form.owner || null,
+      max_weight_kg: form.maxWeight ? Number(form.maxWeight) : null,
+    };
+    if (editingLuggageId) {
+      onUpdateLuggage(editingLuggageId, payload);
+    } else {
+      onAddLuggage(payload);
+    }
+    cancelForm();
+  }
+
+  const formOpen = showAddForm || editingLuggageId !== null;
+  const unassignedCount = items.filter((i) => !i.luggage_id).length;
 
   return (
     <div>
-      <button className="btn btn-primary btn-sm" onClick={() => setShowForm((v) => !v)}>
-        {showForm ? 'Annuler' : '+ Ajouter une valise'}
+      <button className="btn btn-primary btn-sm" onClick={startAdd}>
+        {showAddForm ? 'Annuler' : '+ Ajouter une valise'}
       </button>
 
-      {showForm && (
-        <form className="form card" onSubmit={handleAdd}>
+      {formOpen && (
+        <form className="form card" onSubmit={handleSubmit}>
           <label>
             Nom
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Grande valise rouge" required />
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Grande valise rouge"
+              required
+            />
           </label>
           <div className="form-row">
             <label>
               Type
-              <select value={kind} onChange={(e) => setKind(e.target.value as LuggageKind)}>
+              <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as LuggageKind })}>
                 {(Object.keys(LUGGAGE_KIND_LABELS) as LuggageKind[]).map((k) => (
                   <option key={k} value={k}>
                     {LUGGAGE_KIND_LABELS[k]}
@@ -434,12 +575,18 @@ function ValisesTab({ luggages, people, items, totalForLuggage, onAddLuggage, on
             </label>
             <label>
               Poids max (kg)
-              <input type="number" min={0} step={0.5} value={maxWeight} onChange={(e) => setMaxWeight(e.target.value)} />
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                value={form.maxWeight}
+                onChange={(e) => setForm({ ...form, maxWeight: e.target.value })}
+              />
             </label>
           </div>
           <label>
             Attribuée à
-            <select value={owner} onChange={(e) => setOwner(e.target.value)}>
+            <select value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })}>
               <option value="">Partagée / non attribuée</option>
               {people.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -448,9 +595,14 @@ function ValisesTab({ luggages, people, items, totalForLuggage, onAddLuggage, on
               ))}
             </select>
           </label>
-          <button className="btn btn-primary" type="submit">
-            Ajouter
-          </button>
+          <div className="form-row">
+            <button className="btn btn-primary" type="submit">
+              {editingLuggageId ? 'Enregistrer' : 'Ajouter'}
+            </button>
+            <button className="btn btn-secondary" type="button" onClick={cancelForm}>
+              Annuler
+            </button>
+          </div>
         </form>
       )}
 
@@ -467,7 +619,7 @@ function ValisesTab({ luggages, people, items, totalForLuggage, onAddLuggage, on
             const itemCount = items.filter((i) => i.luggage_id === luggage.id).length;
             return (
               <li key={luggage.id} className="list-item luggage-card">
-                <div className="list-item-body">
+                <Link to={`/trip/${tripId}/luggage/${luggage.id}`} className="list-item-link-area">
                   <strong>{luggage.name}</strong>
                   <span className="hint">
                     {LUGGAGE_KIND_LABELS[luggage.kind]}
@@ -486,19 +638,24 @@ function ValisesTab({ luggages, people, items, totalForLuggage, onAddLuggage, on
                     {maxG ? ` / ${luggage.max_weight_kg} kg` : ''}
                     {over ? ' — trop lourde !' : ''}
                   </span>
+                </Link>
+                <div className="row-actions">
+                  <button className="icon-btn" onClick={() => startEdit(luggage)} aria-label="Modifier">
+                    ✏️
+                  </button>
+                  <button className="icon-btn" onClick={() => onDeleteLuggage(luggage.id)} aria-label="Supprimer">
+                    ✕
+                  </button>
                 </div>
-                <button className="icon-btn" onClick={() => onDeleteLuggage(luggage.id)} aria-label="Supprimer">
-                  ✕
-                </button>
               </li>
             );
           })}
         </ul>
       )}
 
-      {unassignedWeight > 0 && (
+      {unassignedCount > 0 && (
         <p className="hint">
-          {unassignedWeight} article{unassignedWeight > 1 ? 's' : ''} pas encore assigné{unassignedWeight > 1 ? 's' : ''}
+          {unassignedCount} article{unassignedCount > 1 ? 's' : ''} pas encore assigné{unassignedCount > 1 ? 's' : ''}
           à une valise (voir l'onglet « Par personne »).
         </p>
       )}

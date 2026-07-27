@@ -1,4 +1,11 @@
-import type { Item, ItemCategory, Person } from '../types';
+import type { Item, ItemCategory, LuggageKind, Person } from '../types';
+
+export const LUGGAGE_KIND_LABELS: Record<LuggageKind, string> = {
+  valise: 'Valise',
+  cabine: 'Bagage cabine',
+  sac: 'Sac',
+  autre: 'Autre',
+};
 
 export const CATEGORY_LABELS: Record<ItemCategory, string> = {
   vetement: 'Vêtements',

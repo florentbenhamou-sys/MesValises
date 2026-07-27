@@ -344,6 +344,23 @@ a.list-item {
   gap: 2px;
 }
 
+.list-item-link-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
 .chevron {
   color: var(--text);
   opacity: 0.5;
