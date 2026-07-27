@@ -1,11 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useHousehold } from '../context/HouseholdContext';
 
 type Mode = 'choose' | 'create' | 'join';
 
 export default function Onboarding() {
-  const { createHousehold, joinHousehold, error, clearError, configured } = useHousehold();
+  const { household, createHousehold, joinHousehold, error, clearError, configured } = useHousehold();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (household) {
+      navigate('/', { replace: true });
+    }
+  }, [household, navigate]);
   const [mode, setMode] = useState<Mode>('choose');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
