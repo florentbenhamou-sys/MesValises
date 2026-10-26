@@ -6,6 +6,8 @@
   --text: #c9cbd3;
   --text-h: #ffffff;
   --border: #2a2d36;
+  --accent: #4f8cff;
+  --danger: #ff5a4f;
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
@@ -77,6 +79,13 @@ button {
   background: var(--bg);
 }
 
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .app-header h1 {
   margin: 0;
   font-size: 28px;
@@ -87,4 +96,202 @@ button {
 .app-main {
   flex: 1;
   padding-bottom: 24px;
+}
+
+button {
+  cursor: pointer;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.add-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.empty {
+  margin-top: 40px;
+  text-align: center;
+}
+
+.seance-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.seance-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.seance-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: left;
+}
+
+.seance-date {
+  font-size: 13px;
+}
+
+.seance-date::first-letter {
+  text-transform: uppercase;
+}
+
+.seance-titre {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.seance-meta {
+  font-size: 14px;
+}
+
+.seance-notes {
+  margin-top: 4px;
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.seance-actions {
+  display: flex;
+  border-top: 1px solid var(--border);
+}
+
+.seance-actions button {
+  flex: 1;
+  min-height: 44px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.seance-actions button + button {
+  border-left: 1px solid var(--border);
+}
+
+.seance-actions .danger,
+.danger-btn {
+  color: var(--danger);
+}
+
+/* Feuille de saisie (bas de l'écran, style iOS) */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.sheet {
+  width: 100%;
+  max-width: 600px;
+  max-height: calc(100dvh - var(--safe-top) - 12px);
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+  padding: 0 calc(var(--gutter) + var(--safe-right)) calc(var(--safe-bottom) + 20px)
+    calc(var(--gutter) + var(--safe-left));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sheet-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 0 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.sheet-header h2 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--text-h);
+  text-align: center;
+}
+
+.link {
+  color: var(--accent);
+  min-height: 44px;
+}
+
+.link.strong {
+  font-weight: 600;
+}
+
+.link:disabled {
+  opacity: 0.4;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.field span {
+  font-size: 13px;
+}
+
+.field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.danger-btn {
+  min-height: 48px;
+  margin-top: 6px;
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  font-weight: 600;
 }
