@@ -129,18 +129,3 @@ src/context/              Contexte foyer (auth anonyme, création/adhésion)
 src/pages/                Onboarding, Voyages, Famille, Détail d'un voyage
 src/components/           Layout (en-tête + navigation basse)
 ```
-
-## Training SFL (app séparée)
-
-Le dossier [`training-sfl/`](./training-sfl) contient une seconde PWA,
-indépendante de MesValises (son propre `package.json`, manifeste, icônes et
-build), pensée pour l'iPhone 14 en plein écran (zones sûres, `100dvh`).
-
-```bash
-cd training-sfl
-npm install
-npm run dev     # ou npm run build → training-sfl/dist/
-```
-
-Elle se déploie comme un site statique distinct puis s'installe via Safari →
-Partager → Sur l'écran d'accueil.
